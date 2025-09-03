@@ -1,0 +1,129 @@
+﻿@page "/OllamaChat"
+
+@using System.Text
+@using System.Text.Json
+@using OllamaClientBlazorApp.Components
+
+<div class="card" style="max-width:600px;margin:auto;">
+    <div class="card-header">
+        <h4>Ollama Chatbot</h4>
+    </div>
+    <div class="card-body">
+        <div style="min-height:120px;max-height:300px;overflow:auto;background:#f8f9fa;padding:10px;border-radius:4px;">
+            <pre>@(string.IsNullOrWhiteSpace(ChatOutput) ? "Ask me anything..." : ChatOutput)</pre>
+        </div>
+        <div class="input-group mt-3">
+            <input @bind="Prompt" @bind:event="oninput" class="form-control" placeholder="Type your prompt and press Enter or Send"
+                   @onkeydown="HandleKeyDown" />
+            <button class="btn btn-primary" @onclick="SendPrompt" disabled="@IsBusy">Send</button>
+        </div>
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="text-danger mt-2">@ErrorMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private string Prompt { get; set; } = string.Empty;
+    private string ChatOutput { get; set; } = string.Empty;
+    private bool IsBusy { get; set; } = false;
+    private string ErrorMessage { get; set; } = string.Empty;
+
+    private async Task SendPrompt()
+    {
+        ErrorMessage = string.Empty;
+        var trimmed = Prompt.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            ErrorMessage = "Prompt cannot be empty.";
+            return;
+        }
+
+        if (trimmed.Equals("/exit", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("/bye", StringComparison.OrdinalIgnoreCase))
+        {
+            ChatOutput += "\n[Session ended by user]";
+            Prompt = string.Empty;
+            StateHasChanged();
+            return;
+        }
+
+        IsBusy = true;
+        ChatOutput += $"\n\nYou: {Prompt}\nOllama: ";
+        StateHasChanged();
+
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            var apiUrl = "http://localhost:11434/api/generate";
+            var requestBody = new
+            {
+                model = "llama3.2:1b",
+                prompt = trimmed,
+                stream = true
+            };
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.PostAsync(apiUrl, content);
+            if (response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var reader = new StreamReader(stream);
+
+                string? line;
+                var sb = new StringBuilder();
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        try
+                        {
+                            var streamResponse = JsonSerializer.Deserialize<OllamaStreamResponse>(line);
+                            if (streamResponse != null && !string.IsNullOrEmpty(streamResponse.response))
+                            {
+                                sb.Append(streamResponse.response);
+                                ChatOutput += streamResponse.response;
+                                StateHasChanged();
+                            }
+                            if (streamResponse != null && streamResponse.done)
+                            {
+                                ChatOutput += "\n[Ollama: Stream completed.]\n";
+                                StateHasChanged();
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ChatOutput += $"\n[Deserialization error]: {ex.Message}\n";
+                            StateHasChanged();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                ErrorMessage = $"HTTP error: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Exception: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            Prompt = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !IsBusy)
+        {
+            await SendPrompt();
+        }
+    }
+}
