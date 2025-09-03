@@ -17,22 +17,32 @@ The chatbot sends user prompts to the Ollama API (`http://localhost:11434/api/ge
 ---
 ## 🚀 Getting Started
 
-1. **Install Ollama** (if not already):
+1. **Install Ollama** (if not already): https://ollama.com/download/windows
 
 2. Download the LLaMA 3.2 1B model:
 ollama pull llama3.2:1b
    
 3. Run Ollama locally:
-ollama run llama3.2:1b
+ollama run llama3.2:1b   
    
-4.Run this Blazor app:
+4. Run this Blazor app:
 Open in Visual Studio or run: dotnet run
 
-📦 API Reference
-This app uses the POST /api/generate endpoint from the Ollama local API to generate responses.
+
+📦 API Reference:    
+   This app uses the POST /api/generate endpoint from the Ollama local API to generate responses.
+
 Example payload:
+
 {
+
   "model": "llama3.2:1b",
+
   "prompt": "Hello, how are you?",
+
   "stream": true
+
 }
+
+<img width="981" height="609" alt="image" src="https://github.com/user-attachments/assets/05dca884-a061-4a04-b267-87eaeedf62b8" />
+
